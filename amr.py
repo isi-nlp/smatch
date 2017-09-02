@@ -10,6 +10,12 @@ For detailed description of AMR, see http://www.isi.edu/natural-language/amr/a.p
 from __future__ import print_function
 from collections import defaultdict
 import sys
+import logging as log
+import codecs
+
+if sys.version_info[:2] < (3, 0):
+    from itertools import izip as zip   # zipping iterator
+
 
 # change this if needed
 ERROR_LOG = sys.stderr
@@ -421,6 +427,58 @@ class AMR(object):
         attribute_list[0].append(["TOP", node_value_list[0]])
         result_amr = AMR(node_name_list, node_value_list, relation_list, attribute_list)
         return result_amr
+
+    @staticmethod
+    def parse_amrs(file_path, skip_errors=False, encoding='utf-8'):
+        """
+        Reads and parses AMRs from file
+        :param file_path: path to file having AMRs
+        :param skip_errors: Should the invalid AMRs be skipped instead of aborting with an exception? default=False
+        :param encoding:  Which encoding to use for reading the file? default=utf-8
+        :return: iterator which yields AMRs
+        """
+        log.debug("Reading AMRs from %s. Skip Errors? %s " % (file_path, skip_errors))
+        count = 0
+        with codecs.open(file_path, encoding=encoding) as inp:
+            while True:
+                amr_line = AMR.get_amr_line(inp)
+                if not amr_line:
+                    break # end of input
+                try:
+                    amr_graph = AMR.parse_AMR_line(amr_line)
+                except Exception as e:
+                    if skip_errors:
+                        log.warning("Can't parse AMR. Skipping AMR %d" % count)
+                        log.warning(e)
+                        log.debug(amr_line)
+                        continue
+                    else:
+                        raise e
+                yield amr_graph
+                count += 1
+        log.debug("Finished reading file %s. Found %d AMRs" % (file_path, count))
+
+    @staticmethod
+    def read_amrs(file_path1, file_path2, skip_errors=False, encoding='utf-8', ensure_match=True):
+        """
+        Reads and parses AMRs from two files in order of occurrence and returns them as pairs.
+        This function may be handy when you are comparing AMRs persisted in two files
+        :param file_path1: path to file having AMRs
+        :param file_path1: path to file having AMRs
+        :param skip_errors: Should the invalid AMRs be skipped instead of aborting with an exception? default=False
+        :param encoding:  Which encoding to use for reading the file? default=utf-8
+        :param ensure_match: Should an exception be raised when counts of AMRS in two files differ? default=True
+        :return: iterator which yields pairs of AMRs
+        """
+        amrs1 = AMR.parse_amrs(file_path1, encoding=encoding, skip_errors=skip_errors)
+        amrs2 = AMR.parse_amrs(file_path2, encoding=encoding, skip_errors=skip_errors)
+        for amr1, amr2 in zip(amrs1, amrs2):
+            yield (amr1, amr2)
+        if ensure_match:
+            for _ in amrs1:
+                raise Exception('Count mis match: %s has more AMRs than %s' % (file_path1, file_path2))
+            for _ in amrs2:
+                raise Exception('Count mis match: %s has more AMRs than %s' % (file_path2, file_path1))
 
 # test AMR parsing
 # run by amr.py [file containing AMR]
