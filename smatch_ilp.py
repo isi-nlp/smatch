@@ -17,6 +17,7 @@ log.basicConfig(level=log.WARNING)
 
 
 class SmatchILP(object):
+
     """
     This class provides an implementation of Smatch using 0-1 Integer Linear programming powered by Gurobi
     """
@@ -43,6 +44,12 @@ class SmatchILP(object):
         """
         insts1, rels1 = self.arg1.get_triples2()
         insts2, rels2 = self.arg2.get_triples2()
+
+        # normalize concept names
+        for items in (insts1, insts2, rels1, rels2):
+            for i in range(len(items)):
+                items[i] = (items[i][0], items[i][1], SmatchILP.normalize(items[i][2]))
+
         for index, items in [(self.arg1vars, insts1), (self.arg2vars, insts2)]:
             for name, var, concept in items:
                 assert name == 'instance'  # relation name is instance ==> variable definition
@@ -57,12 +64,6 @@ class SmatchILP(object):
         # instances are relations too
         rels1.extend(insts1)
         rels2.extend(insts2)
-
-        # FIXME: double check :: ignoring TOP relations
-        '''
-        rels1 = [t for t in rels1 if t[0] != 'TOP']
-        rels2 = [t for t in rels2 if t[0] != 'TOP']
-        '''
 
         self.arg1size = len(rels1)
         self.arg2size = len(rels2)
@@ -85,8 +86,9 @@ class SmatchILP(object):
                         trpl_choices.add((id1, id2))
                         # constrains between variables and triples
                         trpl_var_consts[id1, id2] = [(var11, var21)]
+                        # if second argument is also variable
                         if (var12, var22) in var_choices:
-                            trpl_var_consts[id1, id2].append((var11, var21))
+                            trpl_var_consts[id1, id2].append((var12, var22))
 
         # Add variables to ILP model
         model = GRBModel('Smatch ILP')
@@ -112,12 +114,21 @@ class SmatchILP(object):
         model.setObjective(self.trpls.sum(), GRB.MAXIMIZE)
         self.model = model
 
+    @staticmethod
+    def normalize(item):
+        """
+        lowercase and remove quote signifiers from items that are about to be compared
+        """
+        item = item.lower().strip().rstrip('_')
+        return item
+
     def solve(self):
         """
         :return: smatch score
         """
         self.model.optimize()
         assert self.model.status == GRB.OPTIMAL
+
         num_trpl_match = self.model.objVal
         precision = num_trpl_match / min(self.arg1size, self.arg2size)
         recall = num_trpl_match / max(self.arg1size, self.arg2size)
@@ -132,9 +143,12 @@ class SmatchILP(object):
             triples = self.model.getAttr('x', self.trpls)
             var_matchings = [pair for (pair, assignment) in variables.items() if assignment]
             triple_matchings = [pair for (pair, assignment) in triples.items() if assignment]
-            log.info("Variables:")
+            log.info("Number of Triple Matched: %d" % num_trpl_match)
+            log.info("Triples in first AMR : %d" % self.arg1size)
+            log.info("Triples in second AMR : %d" % self.arg2size)
+            log.info("Matched Variables:")
             log.info('\n'.join('  %s -> %s' % (v1, v2) for v1, v2 in var_matchings))
-            log.info("Triples:")
+            log.info("Matched Triples:")
             log.info('\n'.join('  %s -> %s' % (v1, v2) for v1, v2 in triple_matchings))
         return smatch_score
 
@@ -154,4 +168,4 @@ if __name__ == '__main__':
     for amr1, amr2 in AMR.read_amrs(file1, file2):
         smatch = SmatchILP(amr1, amr2)
         score = smatch.solve()
-        print('%.3f' % score)
+        print('%.4f' % score)
