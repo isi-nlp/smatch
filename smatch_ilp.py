@@ -94,8 +94,8 @@ class SmatchILP(object):
         model = GRBModel('Smatch ILP')
         if log.getLogger().getEffectiveLevel() >= log.INFO:
             model.Params.OutputFlag = 0         # disable output
-        log.info("Number of possible variable Matches %s" % len(var_choices))
-        log.info("Number of possible triple matches %s" % len(trpl_var_consts))
+        log.info("Number of possible variable matches %s" % len(var_choices))
+        log.info("Number of possible triple matches %s" % len(trpl_choices))
 
         self.vars = model.addVars(var_choices, vtype=GRB.BINARY, name="v")
         self.trpls = model.addVars(trpl_choices, vtype=GRB.BINARY, name="t")
@@ -113,6 +113,14 @@ class SmatchILP(object):
         # objective
         model.setObjective(self.trpls.sum(), GRB.MAXIMIZE)
         self.model = model
+
+        # stats for how big the problem is
+        var_trpl_consts_count = sum(len(x) for x in trpl_var_consts.values())
+        num_constr = len(var_choices) + len(trpl_choices) + var_trpl_consts_count
+        num_vars = len(var_choices) + len(trpl_choices)
+        log.info("ILP SIZE: %d binary variables (%d vars + %d triple vars)" % (num_vars, len(var_choices), len(trpl_choices)))
+        log.info("ILP SIZE: %d constraints (%d b/w arg vars and triples)" % (num_constr, var_trpl_consts_count))
+
 
     @staticmethod
     def normalize(item):
@@ -158,6 +166,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', help='Verbose (log level = INFO)', action='store_true')
     parser.add_argument('-vv', help='Verbose (log level = DEBUG)', action='store_true')
     parser.add_argument('--significant', type=int, default=2, help='significant digits to output (default: 2)')
+    parser.add_argument('--ms', action='store_true', default=False,
+                        help='Output multiple scores (one AMR pair a score)' \
+                             'instead of a single document-level smatch score (Default: false)')
     args = vars(parser.parse_args())
     if args['v']:
         log.getLogger().setLevel(level=log.INFO)
@@ -166,8 +177,19 @@ if __name__ == '__main__':
         log.getLogger().setLevel(level=log.DEBUG)
 
     file1, file2 = args['amrfile']
+    float_fmt = '%%.%df' % args['significant']
+    total = 0
+    count = 0
     for amr1, amr2 in AMR.read_amrs(file1, file2):
         smatch = SmatchILP(amr1, amr2)
         score = smatch.solve()
-        out = ('%%.%df' % args['significant']) % score
-        print('F-score: %s' % out)
+        total += score
+        count += 1
+        if args['ms']:
+            out = float_fmt % score
+            print('F-score: %s' % out)
+    if count > 0:
+        out = float_fmt % (total / count)
+        print('\nAverage F-score: %s' % out)
+    else:
+        print("No AMRs are found")
