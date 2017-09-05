@@ -157,6 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('amrfile', nargs=2, help='Path to file having AMR')
     parser.add_argument('-v', help='Verbose (log level = INFO)', action='store_true')
     parser.add_argument('-vv', help='Verbose (log level = DEBUG)', action='store_true')
+    parser.add_argument('--significant', type=int, default=2, help='significant digits to output (default: 2)')
     args = vars(parser.parse_args())
     if args['v']:
         log.getLogger().setLevel(level=log.INFO)
@@ -168,4 +169,5 @@ if __name__ == '__main__':
     for amr1, amr2 in AMR.read_amrs(file1, file2):
         smatch = SmatchILP(amr1, amr2)
         score = smatch.solve()
-        print('%.4f' % score)
+        out = ('%%.%df' % args['significant']) % score
+        print('F-score: %s' % out)
