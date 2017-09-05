@@ -23,20 +23,27 @@ The `smatch_ilp.py` provides this ILP based algorithm which uses [Gurobi](http:/
 ### Usage:
 
     $ python smatch_ilp.py -h
-        usage: smatch_ilp.py [-h] [-v] [-vv] amrfile amrfile
+    usage: smatch_ilp.py [-h] [-v] [-vv] [--significant SIGNIFICANT] [--ms]
+                         amrfile amrfile
 
-        Smatch ILP
+    Smatch ILP
 
-        positional arguments:
-          amrfile     Path to file having AMR
+    positional arguments:
+      amrfile               Path to file having AMR
 
-        optional arguments:
-          -h, --help  show this help message and exit
-          -v          Verbose (log level = INFO)
-          -vv         Verbose (log level = DEBUG)
+    optional arguments:
+      -h, --help            show this help message and exit
+      -v                    Verbose (log level = INFO)
+      -vv                   Verbose (log level = DEBUG)
+      --significant SIGNIFICANT
+                            significant digits to output (default: 2)
+      --ms                  Output multiple scores (one AMR pair a score)instead
+                            of a single document-level smatch score (Default:
+                            false)
 
 #### Examples
 
     python smatch_ilp.py test_input{1,2}.txt                    # minimal output
+    python smatch_ilp.py test_input{1,2}.txt --ms               # minimal output per document
     python smatch_ilp.py test_input1.txt test_input2.txt -v     # Output includes variable and triple matchings
     python smatch_ilp.py test_input1.txt test_input2.txt -vv    # Output includes ILP optimization logs
