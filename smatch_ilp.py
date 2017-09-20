@@ -48,7 +48,9 @@ class SmatchILP(object):
         # normalize concept names
         for items in (insts1, insts2, rels1, rels2):
             for i in range(len(items)):
-                items[i] = (items[i][0], items[i][1], SmatchILP.normalize(items[i][2]))
+                # GUROBI cant handle Unicode so step down to ASCII
+                items[i] = (items[i][0].encode('ascii', 'ignore'), items[i][1].encode('ascii', 'ignore'),
+                            SmatchILP.normalize(items[i][2]).encode('ascii', 'ignore'))
 
         for index, items in [(self.arg1vars, insts1), (self.arg2vars, insts2)]:
             for name, var, concept in items:
