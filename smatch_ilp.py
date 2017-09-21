@@ -134,19 +134,15 @@ class SmatchILP(object):
 
     def solve(self):
         """
-        :return: smatch score
+        :return: smatch score, triple_match count
         """
         self.model.optimize()
         assert self.model.status == GRB.OPTIMAL
 
         num_trpl_match = self.model.objVal
-        precision = num_trpl_match / min(self.arg1size, self.arg2size)
-        recall = num_trpl_match / max(self.arg1size, self.arg2size)
-        denominator = (precision + recall)
-        if abs(0.0 - denominator) < 1e-6:
-            smatch_score = 0.0
-        else:
-            smatch_score = 2 * precision * recall / denominator
+        precision = num_trpl_match / self.arg1size
+        recall = num_trpl_match / self.arg2size
+        smatch_score = SmatchILP.f_mneasure(precision, recall)
 
         if log.getLogger().getEffectiveLevel() <= log.INFO:
             variables = self.model.getAttr('x', self.vars)
@@ -160,16 +156,25 @@ class SmatchILP(object):
             log.info('\n'.join('  %s -> %s' % (v1, v2) for v1, v2 in var_matchings))
             log.info("Matched Triples:")
             log.info('\n'.join('  %s -> %s' % (v1, v2) for v1, v2 in triple_matchings))
-        return smatch_score
+        return smatch_score, num_trpl_match
+
+    @staticmethod
+    def f_mneasure(prec, recall):
+        denominator = (prec + recall)
+        if abs(0.0 - denominator) < 1e-6:
+            f_score = 0.0
+        else:
+            f_score = 2 * prec * recall / denominator
+        return  f_score
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Smatch ILP')
-    parser.add_argument('amrfile', nargs=2, help='Path to file having AMR')
+    parser.add_argument('amrfile', nargs=2, help='Path to file having AMR. The second AMR should be a gold.')
     parser.add_argument('-v', help='Verbose (log level = INFO)', action='store_true')
     parser.add_argument('-vv', help='Verbose (log level = DEBUG)', action='store_true')
-    parser.add_argument('--significant', type=int, default=2, help='significant digits to output (default: 2)')
+    parser.add_argument('-s', '--significant', type=int, default=2, help='significant digits to output (default: 2)')
     parser.add_argument('--ms', action='store_true', default=False,
-                        help='Output multiple scores (one AMR pair a score)' \
+                        help='Output multiple scores (one AMR pair a score)'
                              'instead of a single document-level smatch score (Default: false)')
     args = vars(parser.parse_args())
     if args['v']:
@@ -180,18 +185,22 @@ if __name__ == '__main__':
 
     file1, file2 = args['amrfile']
     float_fmt = '%%.%df' % args['significant']
-    total = 0
-    count = 0
+    # Note: instead of computing overage, we are summing all AMRs
+    total_match, file1_count, file2_count = 0, 0, 0
     for amr1, amr2 in AMR.read_amrs(file1, file2):
         smatch = SmatchILP(amr1, amr2)
-        score = smatch.solve()
-        total += score
-        count += 1
+        score, match_count = smatch.solve()
+        total_match += match_count
+        file1_count += smatch.arg1size
+        file2_count += smatch.arg2size
         if args['ms']:
             out = float_fmt % score
             print('F-score: %s' % out)
-    if count > 0:
-        out = float_fmt % (total / count)
-        print('\nAverage F-score: %s' % out)
+    if total_match > 0:
+        prec = total_match / file1_count
+        recall = total_match / file2_count
+        smatch_score = SmatchILP.f_mneasure(prec, recall)
+        out = float_fmt % smatch_score
+        print('\nAggregated F-score: %s' % out)
     else:
-        print("No AMRs are found")
+        print("No AMRs are found or matched")
