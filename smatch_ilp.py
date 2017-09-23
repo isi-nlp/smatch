@@ -45,12 +45,17 @@ class SmatchILP(object):
         insts1, rels1 = self.arg1.get_triples2()
         insts2, rels2 = self.arg2.get_triples2()
 
-        # normalize concept names
-        for items in (insts1, insts2, rels1, rels2):
+        # normalize concept names -- only instances have concept names
+        for items, shld_norm in [(insts1, True), (insts2, True), (rels1, False), (rels2, False)]:
             for i in range(len(items)):
                 # GUROBI cant handle Unicode so step down to ASCII
-                items[i] = (items[i][0].encode('ascii', 'ignore'), items[i][1].encode('ascii', 'ignore'),
-                            SmatchILP.normalize(items[i][2]).encode('ascii', 'ignore'))
+                items[i] = (items[i][0].encode('ascii', 'ignore'),
+                            items[i][1].encode('ascii', 'ignore'),
+                            (SmatchILP.normalize(items[i][2]) if shld_norm else items[i][2]).encode('ascii', 'ignore'))
+        log.debug("AMR 1 Instances:\n  %s" % insts1)
+        log.debug("AMR 1 Relations:\n  %s" % rels1)
+        log.debug("AMR 2 Instances:\n  %s" % insts2)
+        log.debug("AMR 2 Relations:\n  %s" % rels2)
 
         for index, items in [(self.arg1vars, insts1), (self.arg2vars, insts2)]:
             for name, var, concept in items:
@@ -75,22 +80,26 @@ class SmatchILP(object):
         for name1, var11, var12 in rels1:
             id1 = "%s:%s:%s" % (name1, var11, var12)
             for name2, var21, var22 in rels2:
+                possible = 0
                 id2 = "%s:%s:%s" % (name2, var21, var22)
-
                 # triple name matches && first argument to triples can be matched
                 if name1 == name2 and (var11, var21) in var_choices:
                     # second argument to triple can also be matched OR
+                    possible += 1
                     if (var12, var22) in var_choices or (
                         # they are the same concepts
                             var12 not in self.arg1vars and
                             var22 not in self.arg2vars and
                             var12 == var22):
+                        possible += 1
                         trpl_choices.add((id1, id2))
                         # constrains between variables and triples
                         trpl_var_consts[id1, id2] = [(var11, var21)]
                         # if second argument is also variable
+
                         if (var12, var22) in var_choices:
                             trpl_var_consts[id1, id2].append((var12, var22))
+                log.debug('\t %s <--> %s ? %s ' % (id1, id2, possible))
 
         # Add variables to ILP model
         model = GRBModel('Smatch ILP')
