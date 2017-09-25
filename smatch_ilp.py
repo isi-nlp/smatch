@@ -42,16 +42,23 @@ class SmatchILP(object):
         Constructs GUROBI ILP model
         :return: None
         """
-        insts1, rels1 = self.arg1.get_triples2()
-        insts2, rels2 = self.arg2.get_triples2()
-
-        # normalize concept names -- only instances have concept names
-        for items, shld_norm in [(insts1, True), (insts2, True), (rels1, False), (rels2, False)]:
+        insts1, attrs1, rels1 = self.arg1.get_triples()
+        insts2, attrs2, rels2 = self.arg2.get_triples()
+        for items, shld_norm in [(insts1, True), (insts2, True), (attrs1, True),
+                                 (attrs2, True), (rels1, False), (rels2, False)]:
             for i in range(len(items)):
                 # GUROBI cant handle Unicode so step down to ASCII
-                items[i] = (items[i][0].encode('ascii', 'ignore'),
+                items[i] = [items[i][0].encode('ascii', 'ignore').lower(),
                             items[i][1].encode('ascii', 'ignore'),
-                            (SmatchILP.normalize(items[i][2]) if shld_norm else items[i][2]).encode('ascii', 'ignore'))
+                            items[i][2].encode('ascii', 'ignore')]
+                # normalize concept names -- instances and attributes
+                if shld_norm:
+                    items[i][2] = SmatchILP.normalize(items[i][2])
+
+        # Attributes are same as relations
+        rels1.extend(attrs1)
+        rels2.extend(attrs2)
+
         log.debug("AMR 1 Instances:\n  %s" % insts1)
         log.debug("AMR 1 Relations:\n  %s" % rels1)
         log.debug("AMR 2 Instances:\n  %s" % insts2)
@@ -87,9 +94,8 @@ class SmatchILP(object):
                     # second argument to triple can also be matched OR
                     possible += 1
                     if (var12, var22) in var_choices or (
-                        # they are the same concepts
-                            var12 not in self.arg1vars and
-                            var22 not in self.arg2vars and
+                            # they are the same concepts
+                            # var12 not in self.arg1vars and var22 not in self.arg2vars and
                             var12 == var22):
                         possible += 1
                         trpl_choices.add((id1, id2))
